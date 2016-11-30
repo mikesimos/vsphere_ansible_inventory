@@ -126,9 +126,50 @@ class VSphere:
                         data[d[group]] = [d[field]]
         return data
 
+    def list_and_save(self, cache_path):
+        """
+        :param  str cache_path: A path for caching inventory list data.
+        :return:
+        """
+        data = self.list_inventory()
+        with open(cache_path, 'w') as fp:
+            dump(data, fp)
+        return data
+
     def cached_inventory(self, cache_path=None, cache_ttl=3600, refresh=False):
-        # TODO: implement caching
-        return self.inventory
+        """
+        Wrapper method implementing caching functionality over list_inventory.
+        :param str cache_path: A path for caching inventory list data. Quite a necessity for large environments.
+        :param int cache_ttl: Integer Inventory list data cache Time To Live in seconds. (cache Expiration period)
+        :param boolean refresh: Setting this True, triggers a cache refresh. Fresh data is fetched.
+        :return:
+        Returns an Ansible pluggable dynamic inventory, as a Python json serializable dictionary.
+        """
+        if refresh:
+            return self.list_and_save(cache_path)
+        else:
+            if os.path.isfile(cache_path) and time() - os.stat(cache_path).st_mtime < cache_ttl:
+                try:
+                    with open(cache_path) as f:
+                        data = load(f)
+                        return data
+                except (ValueError, IOError):
+                    return self.list_and_save(cache_path)
+            else:
+                if not os.path.exists(os.path.dirname(cache_path)):
+                    try:
+                        if cache_path:
+                            os.makedirs(os.path.dirname(cache_path))
+                        else:
+                            raise OSError("[Error] cache_path not defined: {}".format(cache_path))
+                    # handle race condition
+                    except OSError as exc:
+                        if exc.errno == errno.EACCES:
+                            print("{}".format(str(exc)))
+                            exit(1)
+                        elif exc.errno != errno.EEXIST:
+                            raise
+                return self.list_and_save(cache_path)
 
 
 def parse_config():
@@ -195,7 +236,7 @@ def main():
         exit(0)
     elif args.list or args.reload_cache:
         v = VSphere(args.hostname, args.username, args.password)
-        data = v.list_inventory()
+        data = v.cached_inventory(cache_path=cache_path, cache_ttl=cache_ttl, refresh=args.reload_cache)
         print ("{}".format(dumps(data)))
         exit(0)
 
