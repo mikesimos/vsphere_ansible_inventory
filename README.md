@@ -20,12 +20,10 @@ pip install -r requirements.txt
 
 # Usage
 Example usage:
-``
-$ ansible all -i vsphere_inventory.py -m ping
+`$ ansible all -i vsphere_inventory.py -m ping`
 
 # Requirements
-* Python >=2.6 or >= 3.3
 * pyVmomi
-* configparser for simultaneously python 2 and 3 compatibility
+* configparser
 
 All package requirements are installed (with pip) during installation.
