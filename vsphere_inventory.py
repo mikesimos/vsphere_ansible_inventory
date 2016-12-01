@@ -30,24 +30,35 @@ from json import dumps, dump, load
 from argparse import ArgumentParser
 from configparser import ConfigParser
 import os
+import errno
 from sys import exit
 from time import time
 
 
 class VSphere:
 
-    def __init__(self, vsphere_hostname=None, vsphere_username='', vsphere_password='', vsphere_port=443):
+    def __init__(self, vcenter_hostname=None, vsphere_username='', vshpere_password='',
+                 vsphere_port=443, nosslcheck=False):
         """
-        :param str vsphere_hostname: The FQDN of vSphere
-        :param str vsphere_username: A vSphere (read only) user
-        :param str vsphere_password: vSphere user password
+        Initialize a session with vSphere vCenter API.
+        :param str vcenter_hostname: The FQDN of vSphere vCenter
+        :param str vsphere_username: A vSphere vCenter (read only) user
+        :param str vshpere_password: vSphere vCenter user password
+        :param int vsphere_port: vSphere Web Client port
+        :param bool nosslcheck: Ignore certificate verification
         """
         try:
             self.inventory = []
-            self.__session__ = connect.SmartConnectNoSSL(host=vsphere_hostname,
-                                                         user=vsphere_username,
-                                                         pwd=vsphere_password,
-                                                         port=vsphere_port)
+
+            if nosslcheck:
+                vcenter_api_connection = connect.SmartConnectNoSSL
+            else:
+                vcenter_api_connection = connect.SmartConnect
+
+            self.__session__ = vcenter_api_connection(host=vcenter_hostname,
+                                                      user=vsphere_username,
+                                                      pwd=vshpere_password,
+                                                      port=vsphere_port)
 
             atexit.register(connect.Disconnect, self.__session__)
 
@@ -56,6 +67,10 @@ class VSphere:
             exit(1)
 
     def list_inventory(self):
+        """
+        List vSphere vCenter API virtual machines. Listing function supports filtering and grouping.
+        :return: An Ansible pluggable dynamic inventory, as a Python json serializable dictionary.
+        """
         try:
             content = self.__session__.RetrieveContent()
             vms_view = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True).view
@@ -72,13 +87,14 @@ class VSphere:
 
     def append_vm_info(self, virtual_machine):
         """
-        Append information for a particular virtual machine object
+        Append information of a particular virtual machine object
+        :param object virtual_machine: vim.VirtualMachine view object
+        :return: None
         """
 
-        # select active networks
         net = []
         summary = virtual_machine.summary
-
+        # select first active network
         for dev in virtual_machine.config.hardware.device:
             if isinstance(dev, vim.vm.device.VirtualEthernetCard):
                 if dev.connectable.connected:
@@ -100,6 +116,11 @@ class VSphere:
                                    })
 
     def filter_inventory(self, **kwargs):
+        """
+        Apply filtering on inventory by kwargs
+        :param kwargs: filter parameter arguments
+        :return: None
+        """
         for d in reversed(self.inventory):
             for name, value in kwargs.items():
                 if type(value) == list:
@@ -110,6 +131,12 @@ class VSphere:
                         self.inventory.remove(d)
 
     def grouped_inventory(self, group='net', field='name'):
+        """
+        Group inventory in group input argument groups, providing a list output of specified field.
+        :param group: Group by attribute name.
+        :param field: Listing field name.
+        :return: An Ansible pluggable dynamic inventory, as a Python json serializable dictionary.
+        """
         data = {}
         for d in self.inventory:
             if d[field]:
@@ -128,8 +155,8 @@ class VSphere:
 
     def list_and_save(self, cache_path):
         """
-        :param  str cache_path: A path for caching inventory list data.
-        :return:
+        :param  str cache_path: Path of inventory list data cache.
+        :return: Ansible pluggable dynamic inventory, as a Python json serializable dictionary.
         """
         data = self.list_inventory()
         with open(cache_path, 'w') as fp:
@@ -142,8 +169,7 @@ class VSphere:
         :param str cache_path: A path for caching inventory list data. Quite a necessity for large environments.
         :param int cache_ttl: Integer Inventory list data cache Time To Live in seconds. (cache Expiration period)
         :param boolean refresh: Setting this True, triggers a cache refresh. Fresh data is fetched.
-        :return:
-        Returns an Ansible pluggable dynamic inventory, as a Python json serializable dictionary.
+        :return: An Ansible pluggable dynamic inventory, as a Python json serializable dictionary.
         """
         if refresh:
             return self.list_and_save(cache_path)
@@ -177,7 +203,7 @@ def parse_config():
     Default configuration file: vsphere-inventory.ini
     Configuration file path may be overridden,
     by defining an environment variable: VSPHERE_INVENTORY_INI_PATH
-    :return: (cache_path, cache_ttl, vsphere_host, vsphere_user, vsphere_pass)
+    :return: (cache_path, cache_ttl, vsphere_host, vsphere_user, vsphere_pass, vsphere_port, vsphere_cert_check)
     """
     config = ConfigParser()
     vsphere_default_ini_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'vsphere-inventory.ini')
@@ -189,8 +215,10 @@ def parse_config():
     vsphere_host = config.get('GENERIC', 'vsphere_host', fallback='')
     vsphere_user = config.get('GENERIC', 'vsphere_user', fallback='')
     vsphere_pass = config.get('GENERIC', 'vsphere_pass', fallback='')
+    vsphere_port = config.getint('GENERIC', 'vsphere_port', fallback='')
+    vsphere_cert_check = config.getboolean('GENERIC', 'vsphere_cert_check', fallback=True)
 
-    return cache_path, cache_ttl, vsphere_host, vsphere_user, vsphere_pass
+    return cache_path, cache_ttl, vsphere_host, vsphere_user, vsphere_pass, vsphere_port, vsphere_cert_check
 
 
 def get_args():
@@ -203,13 +231,16 @@ def get_args():
                                    "./vsphere_inventory.py -l\n"
                                    "./vsphere_inventory.py -s <vSphere.hostname>"
                                    "-u <vSphere_username> -p <vSphere_password> -l\n")
-    parser.add_argument('-s', '--hostname', help='vSphere FQDN')
+    parser.add_argument('-s', '--hostname', help='vSphere vCenter FQDN')
     parser.add_argument('-u', '--username', help='vSphere username')
     parser.add_argument('-p', '--password', help='vSphere password')
+    parser.add_argument('-P', '--port', help='vSphere Port')
+    parser.add_argument('-c', '--no_cert_check', help='Dont check vSphere certificate', action='store_true')
     parser.add_argument('-g', '--guest', help='Print a single guest')
     parser.add_argument('-x', '--host', help='Print a single guest')
     parser.add_argument('-r', '--reload-cache', help='Reload cache', action='store_true')
     parser.add_argument('-l', '--list', help='List all VMs', action='store_true')
+
     return parser.parse_args()
 
 
@@ -217,7 +248,7 @@ def main():
 
     # - Get command line args and config args.
     args = get_args()
-    (cache_path, cache_ttl, vsphere_host, vsphere_user, vsphere_pass) = parse_config()
+    (cache_path, cache_ttl, vcenter_host, vsphere_user, vsphere_pass, vsphere_port, no_cert_check) = parse_config()
 
     # - Override settings with arg parameters if defined
     if not args.password:
@@ -228,14 +259,18 @@ def main():
     if not args.username:
         setattr(args, 'username', vsphere_user)
     if not args.hostname:
-        setattr(args, 'hostname', vsphere_host)
+        setattr(args, 'hostname', vcenter_host)
+    if not args.port:
+        setattr(args, 'port', vsphere_port)
+    if not args.no_cert_check:
+        setattr(args, 'no_cert_check', no_cert_check)
 
-    # - Perform requested operations (list, host/guest)
+    # - Perform requested operations (list, host/guest, reload cache)
     if args.host or args.guest:
         print ('{}')
         exit(0)
     elif args.list or args.reload_cache:
-        v = VSphere(args.hostname, args.username, args.password)
+        v = VSphere(args.hostname, args.username, args.password, vsphere_port=443, nosslcheck=args.no_cert_check)
         data = v.cached_inventory(cache_path=cache_path, cache_ttl=cache_ttl, refresh=args.reload_cache)
         print ("{}".format(dumps(data)))
         exit(0)
