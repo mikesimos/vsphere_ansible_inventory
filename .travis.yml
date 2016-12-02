@@ -1,0 +1,18 @@
+language: python
+python:
+    - "2.7"
+    - "3.3"
+    - "3.4"
+    - "3.5"
+
+install:
+    - pip install -r requirements.txt
+script:
+    - python tests.py
+
+# This reportedly works around an issue downloading packages from pypi on
+# travis.  Consider removing this after the underlying issue is fixed.
+# https://github.com/travis-ci/travis-ci/issues/2389
+sudo: false
+matrix:
+  fast_finish: true
