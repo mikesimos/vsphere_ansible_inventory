@@ -66,8 +66,9 @@ class VSphere:
             print("[Error] Could not connect to vSphere: {}".format(error))
             exit(1)
 
-    def list_inventory(self):
+    def list_inventory(self, filters):
         """
+        :param dict filters:A dictionary of pyVmomi virtual machine attribute key-value filters.
         List vSphere vCenter API virtual machines. Listing function supports filtering and grouping.
         :return: An Ansible pluggable dynamic inventory, as a Python json serializable dictionary.
         """
@@ -76,8 +77,7 @@ class VSphere:
             vms_view = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True).view
             for vm in vms_view:
                 self.append_vm_info(vm)
-            # TODO: ini configurable filters
-            self.filter_inventory(guest_id=['centos64Guest', 'centosGuest'], template=False)
+            self.filter_inventory(**filters)
             output = self.grouped_inventory()
             output.update({"_meta": {"hostvars": {}}})
             return output
@@ -127,7 +127,7 @@ class VSphere:
                     if d[name] not in value and d in self.inventory:
                         self.inventory.remove(d)
                 else:
-                    if d[name] != value and d in self.inventory:
+                    if str(d[name]) != value and d in self.inventory:
                         self.inventory.remove(d)
 
     def grouped_inventory(self, group='net', field='name'):
@@ -153,26 +153,28 @@ class VSphere:
                         data[d[group]] = [d[field]]
         return data
 
-    def list_and_save(self, cache_path):
+    def list_and_save(self, filters, cache_path):
         """
+        :param  dict filters: A dictionary of pyVmomi virtual machine attribute key-value filters.
         :param  str cache_path: Path of inventory list data cache.
         :return: Ansible pluggable dynamic inventory, as a Python json serializable dictionary.
         """
-        data = self.list_inventory()
+        data = self.list_inventory(filters)
         with open(cache_path, 'w') as fp:
             dump(data, fp)
         return data
 
-    def cached_inventory(self, cache_path=None, cache_ttl=3600, refresh=False):
+    def cached_inventory(self, filters, cache_path=None, cache_ttl=3600, refresh=False, ):
         """
         Wrapper method implementing caching functionality over list_inventory.
+        :param dict filters: A dictionary of pyVmomi virtual machine attribute key-value filters.
         :param str cache_path: A path for caching inventory list data. Quite a necessity for large environments.
         :param int cache_ttl: Integer Inventory list data cache Time To Live in seconds. (cache Expiration period)
         :param boolean refresh: Setting this True, triggers a cache refresh. Fresh data is fetched.
         :return: An Ansible pluggable dynamic inventory, as a Python json serializable dictionary.
         """
         if refresh:
-            return self.list_and_save(cache_path)
+            return self.list_and_save(filters, cache_path)
         else:
             if os.path.isfile(cache_path) and time() - os.stat(cache_path).st_mtime < cache_ttl:
                 try:
@@ -180,7 +182,7 @@ class VSphere:
                         data = load(f)
                         return data
                 except (ValueError, IOError):
-                    return self.list_and_save(cache_path)
+                    return self.list_and_save(filters, cache_path)
             else:
                 if not os.path.exists(os.path.dirname(cache_path)):
                     try:
@@ -195,7 +197,7 @@ class VSphere:
                             exit(1)
                         elif exc.errno != errno.EEXIST:
                             raise
-                return self.list_and_save(cache_path)
+                return self.list_and_save(filters, cache_path)
 
 
 def parse_config():
@@ -203,7 +205,7 @@ def parse_config():
     Default configuration file: vsphere-inventory.ini
     Configuration file path may be overridden,
     by defining an environment variable: VSPHERE_INVENTORY_INI_PATH
-    :return: (cache_path, cache_ttl, vsphere_host, vsphere_user, vsphere_pass, vsphere_port, vsphere_cert_check)
+    :return:(filters, cache_path, cache_ttl, vsphere_host, vsphere_user, vsphere_pass, vsphere_port, vsphere_cert_check)
     """
     config = ConfigParser()
     vsphere_default_ini_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'vsphere-inventory.ini')
@@ -217,8 +219,13 @@ def parse_config():
     vsphere_pass = config.get('GENERIC', 'vsphere_pass', fallback='')
     vsphere_port = config.getint('GENERIC', 'vsphere_port', fallback='')
     vsphere_cert_check = config.getboolean('GENERIC', 'vsphere_cert_check', fallback=True)
-
-    return cache_path, cache_ttl, vsphere_host, vsphere_user, vsphere_pass, vsphere_port, vsphere_cert_check
+    filters = {}
+    for name, value in config.items("INVENTORY_FILTERS"):
+        if ',' in value:
+            filters.update({name: [v.strip() for v in value.split(',')]} )
+        else:
+            filters.update({name: value})
+    return filters, cache_path, cache_ttl, vsphere_host, vsphere_user, vsphere_pass, vsphere_port, vsphere_cert_check
 
 
 def get_args():
@@ -248,7 +255,8 @@ def main():
 
     # - Get command line args and config args.
     args = get_args()
-    (cache_path, cache_ttl, vcenter_host, vsphere_user, vsphere_pass, vsphere_port, no_cert_check) = parse_config()
+    (filters, cache_path, cache_ttl, vcenter_host, vsphere_user, vsphere_pass, vsphere_port, no_cert_check) \
+        = parse_config()
 
     # - Override settings with arg parameters if defined
     if not args.password:
@@ -264,6 +272,8 @@ def main():
         setattr(args, 'port', vsphere_port)
     if not args.no_cert_check:
         setattr(args, 'no_cert_check', no_cert_check)
+    if not args.no_cert_check:
+        setattr(args, 'no_cert_check', no_cert_check)
 
     # - Perform requested operations (list, host/guest, reload cache)
     if args.host or args.guest:
@@ -271,7 +281,7 @@ def main():
         exit(0)
     elif args.list or args.reload_cache:
         v = VSphere(args.hostname, args.username, args.password, vsphere_port=443, nosslcheck=args.no_cert_check)
-        data = v.cached_inventory(cache_path=cache_path, cache_ttl=cache_ttl, refresh=args.reload_cache)
+        data = v.cached_inventory(filters, cache_path=cache_path, cache_ttl=cache_ttl, refresh=args.reload_cache)
         print ("{}".format(dumps(data)))
         exit(0)
 
