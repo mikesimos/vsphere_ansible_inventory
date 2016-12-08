@@ -13,7 +13,7 @@ pip install -r requirements.txt
 ``
 
 ###### Clone vsphere_ansible_inventory at your IT Automation server:
-``git clone https://github.com/mikeSimos/vsphere_ansible_inventory.git``
+``git clone https://github.com/mikesimos/vsphere_ansible_inventory.git``
 
 ###### Configure vsphere_inventory.ini file accordingly. An example configuration may be found in current
 vsphere-inventory.ini file.
@@ -32,3 +32,11 @@ All package requirements are installed (with pip) during installation.
 
 # Compatibility
 * Python >=2.7 or >= 3.3
+
+
+Author Information
+------------------
+
+Michael Angelos Simos
+
+[www.asimos.tk](https://www.asimos.tk)
