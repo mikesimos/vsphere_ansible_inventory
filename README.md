@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/mikeSimos/vsphere_ansible_inventory.svg?branch=master)](https://travis-ci.org/mikeSimos/vsphere_ansible_inventory)
+[![Build Status](https://travis-ci.org/mikesimos/vsphere_ansible_inventory.svg?branch=master)](https://travis-ci.org/mikesimos/vsphere_ansible_inventory)
 # Description
 vSphere Ansible Inventory is a fast and robust script for listing VMWare vCenter virtual machines in Ansible dynamic 
 inventory format. This script is one of the fastest of its kind, yet features configurable caching, proving quite useful
