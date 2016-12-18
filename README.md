@@ -26,7 +26,6 @@ Example usage:
 
 # Requirements
 * pyVmomi
-* configparser
 
 All package requirements are installed (with pip) during installation.
 

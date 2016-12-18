@@ -26,9 +26,17 @@ import atexit
 from pyVim import connect
 from pyVmomi import vmodl
 from pyVmomi import vim
-from json import dumps, dump, load
+try:
+    from json import dumps, dump, load
+except ImportError:
+    from simplejson import dumps, dump, load
 from argparse import ArgumentParser
-from configparser import ConfigParser
+try:
+    # python 2
+    from ConfigParser import SafeConfigParser as ConfigParser
+except ImportError:
+    # python 3
+    from configparser import ConfigParser
 import os
 import errno
 from sys import exit
