@@ -220,13 +220,13 @@ def parse_config():
     vsphere_ini_path = os.path.expanduser(
         os.path.expandvars(os.environ.get('VSPHERE_INVENTORY_INI_PATH', vsphere_default_ini_path)))
     config.read(vsphere_ini_path)
-    cache_path = config.get('GENERIC', 'cache_path', fallback='/tmp/ansible-vsphere-inventory-cache.tmp')
-    cache_ttl = config.getint('GENERIC', 'cache_ttl', fallback=7200)
-    vsphere_host = config.get('GENERIC', 'vsphere_host', fallback='')
-    vsphere_user = config.get('GENERIC', 'vsphere_user', fallback='')
-    vsphere_pass = config.get('GENERIC', 'vsphere_pass', fallback='')
-    vsphere_port = config.getint('GENERIC', 'vsphere_port', fallback='')
-    vsphere_cert_check = config.getboolean('GENERIC', 'vsphere_cert_check', fallback=True)
+    cache_path = config.get('GENERIC', 'cache_path')
+    cache_ttl = config.getint('GENERIC', 'cache_ttl')
+    vsphere_host = config.get('GENERIC', 'vsphere_host')
+    vsphere_user = config.get('GENERIC', 'vsphere_user')
+    vsphere_pass = config.get('GENERIC', 'vsphere_pass')
+    vsphere_port = config.getint('GENERIC', 'vsphere_port')
+    vsphere_cert_check = config.getboolean('GENERIC', 'vsphere_cert_check')
     filters = {}
     for name, value in config.items("INVENTORY_FILTERS"):
         if ',' in value:
