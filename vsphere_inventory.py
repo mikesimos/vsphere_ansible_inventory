@@ -46,19 +46,19 @@ from time import time
 class VSphere:
 
     def __init__(self, vcenter_hostname=None, vsphere_username='', vshpere_password='',
-                 vsphere_port=443, nosslcheck=False):
+                 vsphere_port=443, cert_check=True):
         """
         Initialize a session with vSphere vCenter API.
         :param str vcenter_hostname: The FQDN of vSphere vCenter
         :param str vsphere_username: A vSphere vCenter (read only) user
         :param str vshpere_password: vSphere vCenter user password
         :param int vsphere_port: vSphere Web Client port
-        :param bool nosslcheck: Ignore certificate verification
+        :param bool cert_check: Ignores certificate verification when False.
         """
         try:
             self.inventory = []
 
-            if nosslcheck:
+            if not cert_check:
                 vcenter_api_connection = connect.SmartConnectNoSSL
             else:
                 vcenter_api_connection = connect.SmartConnect
@@ -263,7 +263,7 @@ def main():
 
     # - Get command line args and config args.
     args = get_args()
-    (filters, cache_path, cache_ttl, vcenter_host, vsphere_user, vsphere_pass, vsphere_port, no_cert_check) \
+    (filters, cache_path, cache_ttl, vcenter_host, vsphere_user, vsphere_pass, vsphere_port, cert_check) \
         = parse_config()
 
     # - Override settings with arg parameters if defined
@@ -279,16 +279,16 @@ def main():
     if not args.port:
         setattr(args, 'port', vsphere_port)
     if not args.no_cert_check:
-        setattr(args, 'no_cert_check', no_cert_check)
-    if not args.no_cert_check:
-        setattr(args, 'no_cert_check', no_cert_check)
+        setattr(args, 'cert_check', cert_check)
+    else:
+        setattr(args, 'cert_check', False)
 
     # - Perform requested operations (list, host/guest, reload cache)
     if args.host or args.guest:
         print ('{}')
         exit(0)
     elif args.list or args.reload_cache:
-        v = VSphere(args.hostname, args.username, args.password, vsphere_port=443, nosslcheck=args.no_cert_check)
+        v = VSphere(args.hostname, args.username, args.password, vsphere_port=443, cert_check=args.cert_check)
         data = v.cached_inventory(filters, cache_path=cache_path, cache_ttl=cache_ttl, refresh=args.reload_cache)
         print ("{}".format(dumps(data)))
         exit(0)
