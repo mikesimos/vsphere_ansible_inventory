@@ -67,7 +67,8 @@ class VSphere:
                                                       user=vsphere_username,
                                                       pwd=vshpere_password,
                                                       port=vsphere_port)
-
+            self.content = self.__session__.RetrieveContent()
+            
             atexit.register(connect.Disconnect, self.__session__)
 
         except Exception as error:
@@ -81,8 +82,7 @@ class VSphere:
         :return: An Ansible pluggable dynamic inventory, as a Python json serializable dictionary.
         """
         try:
-            content = self.__session__.RetrieveContent()
-            vms_view = content.viewManager.CreateContainerView(content.rootFolder, [vim.VirtualMachine], True).view
+            vms_view = self.content.viewManager.CreateContainerView(self.content.rootFolder, [vim.VirtualMachine], True).view
             for vm in vms_view:
                 self.append_vm_info(vm)
             self.filter_inventory(**filters)
@@ -102,11 +102,24 @@ class VSphere:
 
         net = []
         summary = virtual_machine.summary
-        # select first active network
         for dev in virtual_machine.config.hardware.device:
             if isinstance(dev, vim.vm.device.VirtualEthernetCard):
                 if dev.connectable.connected:
-                    net.append(dev.backing.deviceName)
+                    # For a DistributedVirtualSwitch, retrieve a name from its corresponding 
+                    # vim.DistributedVirtualSwitch obj.
+                    if isinstance(dev.backing, vim.vm.device.VirtualEthernetCard.DistributedVirtualPortBackingInfo):
+                        vsw = self.content\
+                                  .viewManager\
+                                  .CreateContainerView(self.content.rootFolder,
+                                                       [vim.DistributedVirtualSwitch],
+                                                       True)\
+                                   .view
+                        for v in vsw:
+                            for pg in v.portgroup:
+                                if dev.backing.port.portgroupKey == pg.key:
+                                    net.append(pg.name)
+                    else:
+                        net.append(dev.backing.deviceName)
 
         name = getattr(virtual_machine.guest, 'hostName', virtual_machine.name)
         guest_id = getattr(summary.guest, 'guestId', getattr(summary.config, 'guestId', None))
